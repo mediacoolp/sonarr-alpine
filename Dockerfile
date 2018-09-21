@@ -26,7 +26,7 @@ RUN mkdir -p ${APP_PATH} \
  && curl -kL ${APP_URL} | tar -xz -C ${APP_PATH} --strip-components=1 
 
 # Create user and change ownership
-RUN mkdir /config \
+RUN mkdir -p /media-apps/data/sonarr \
  && addgroup -g 1000 -S media \
  && adduser -u 1000 -SHG media media \
  && chown -R media:media \
