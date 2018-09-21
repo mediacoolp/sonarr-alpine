@@ -1,5 +1,4 @@
 FROM sdhibit/alpine-runit:3.6
-MAINTAINER Steve Hibit <sdhibit@gmail.com>
 
 # Add Testing Repository
 RUN echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
