@@ -1,46 +1,73 @@
-FROM alpine:3.7
-# Add Testing Repository
-RUN echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories
+FROM frolvlad/alpine-glibc:alpine-3.7
 
-# Install apk packages
-RUN apk --update upgrade \
- && apk --no-cache add \
-  ca-certificates \
-  libmediainfo@testing \
-  mono@testing \
-  sqlite \
-  tar \
-  unrar
+ENV MEDIAINFO_VERSION='0.7.91'
 
-# Set Sonarr Package Information
-ENV PKG_NAME NzbDrone
-ENV PKG_VER 2.0
-ENV PKG_BUILD 0.5228
-ENV APP_BASEURL https://update.sonarr.tv/v2/master/mono
-ENV APP_PKGNAME ${PKG_NAME}.master.${PKG_VER}.${PKG_BUILD}.mono.tar.gz
-ENV APP_URL ${APP_BASEURL}/${APP_PKGNAME}
-ENV APP_PATH /opt/sonarr
+RUN apk -U upgrade && \
+    apk add --no-cache \
+      ca-certificates \
+      openssl \
+      xz \
+      tar \
+      sqlite \
+      sqlite-libs \
+      gcc g++ git make \
+      unrar \
+      wget \
+      unzip \
+      curl \
+      tzdata \
+      libmms \
+      zlib zlib-dev && \
+\
+    export MONO_VERSION=4.8.0.495-1 && \
+    wget https://archive.archlinux.org/packages/m/mono/mono-$MONO_VERSION-x86_64.pkg.tar.xz && \
+    tar -xJf /mono-$MONO_VERSION-x86_64.pkg.tar.xz && \
+    mozroots --import --ask-remove && \
+\
+    wget "https://mediaarea.net/download/binary/mediainfo/${MEDIAINFO_VERSION}/MediaInfo_CLI_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" \
+        -O "/MediaInfo_CLI_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" && \
+    wget "https://mediaarea.net/download/binary/libmediainfo0/${MEDIAINFO_VERSION}/MediaInfo_DLL_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" \
+        -O "/MediaInfo_DLL_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" && \
+    tar -xf "/MediaInfo_CLI_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" && \
+    tar -xf "/MediaInfo_DLL_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" && \
+\
+    cd /MediaInfo_CLI_GNU_FromSource && \
+      ./CLI_Compile.sh && \
+    cd /MediaInfo_CLI_GNU_FromSource/MediaInfo/Project/GNU/CLI/ && \
+      make install && \
+\
+    cd /MediaInfo_DLL_GNU_FromSource && \
+      ./SO_Compile.sh && \
+    cd /MediaInfo_DLL_GNU_FromSource/MediaInfoLib/Project/GNU/Library && \
+      make install && \
+    cd /MediaInfo_DLL_GNU_FromSource/ZenLib/Project/GNU/Library && \
+      make install && \
+\
+    adduser -u 1000 -S media -G users && \
+    mkdir -p /media-apps/data/sonarr /sabnzbd/Tv /sonarr && \
+    chown -R media:users /media-apps/data/sonarr /tvseries && \
+\
+    wget https://update.sonarr.tv/v2/master/mono/NzbDrone.master.tar.gz -O /NzbDrone.master.tar.gz && \
+    tar -xf /NzbDrone.master.tar.gz --strip 1 -C /sonarr && \
+    chown -R media:users /sonarr && \
+\
+    apk del \
+      make \
+      g++ gcc git sqlite && \
+    rm -rf \
+      "/MediaInfo_CLI_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" \
+      "/MediaInfo_DLL_${MEDIAINFO_VERSION}_GNU_FromSource.tar.xz" \
+      /mono-$MONO_VERSION-x86_64.pkg.tar.xz \
+      /NzbDrone.master.tar.gz \
+      /MediaInfo_CLI_GNU_FromSource \
+      /MediaInfo_DLL_GNU_FromSource \
+      /tmp/* \
+      /var/cache/apk/*
 
-# Download & Install Sonarr
-RUN mkdir -p ${APP_PATH} \
- && curl -kL ${APP_URL} | tar -xz -C ${APP_PATH} --strip-components=1 
-
-# Create user and change ownership
-RUN mkdir -p /media-apps/data/sonarr \
- && addgroup -g 1000 -S media \
- && adduser -u 1000 -SHG media media \
- && chown -R media:media \
-    ${APP_PATH} \
-    "/media-apps/data/sonarr"
-
-VOLUME ["/media-apps/data/sonarr"]
-
-# Default Sonarr server ports
 EXPOSE 8989
-EXPOSE 9898
 
-WORKDIR ${APP_PATH}
+USER media
 
-# Add services to runit
-ADD sonarr.sh /etc/service/sonarr/run
-RUN chmod +x /etc/service/*/run
+VOLUME ["/media-apps/data/sonarr", "/sabnzbd/Tv"]
+
+CMD ["/usr/bin/mono", "/sonarr/NzbDrone.exe", "--no-browser", "-data=/media-apps/data/sonarr"]
